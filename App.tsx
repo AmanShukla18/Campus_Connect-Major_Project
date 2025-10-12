@@ -1,5 +1,3 @@
-// Must be at the top — gesture handler needs to be imported before other libraries
-import 'react-native-gesture-handler';
 import React from 'react';
 import { StatusBar, StyleSheet, TouchableOpacity } from 'react-native';
 import { NavigationContainer, DefaultTheme as NavigationDefaultTheme } from '@react-navigation/native';
@@ -30,9 +28,10 @@ function AppDrawer() {
     <Drawer.Navigator
       initialRouteName="Notices"
       drawerContent={(props) => <CustomDrawerContent {...props} />}
-      drawerType="slide"
-      overlayColor="rgba(11,18,32,0.25)"
       screenOptions={({ navigation }) => ({
+        overlayColor: "rgba(11,18,32,0.25)",
+        drawerType: 'slide',
+        swipeEdgeWidth: 100,
         headerShown: true,
         headerStyle: { backgroundColor: colors.surface, elevation: 0 },
         headerTitleAlign: 'center',
