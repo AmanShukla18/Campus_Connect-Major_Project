@@ -24,7 +24,7 @@ Notes
 - Firebase is stubbed in `lib/firebase.ts` so the app runs without installing Firebase. After installing Firebase, follow `docs/firebase-backend.md` to wire it up.
 - Reanimated requires the Babel plugin already configured in `babel.config.js`.
 
-Project structure highlights
+Project structure highlightss
 
 - `App.tsx` — App entry, ThemeProvider and Drawer navigation.
 - `hooks/useAuth.tsx` — Simple auth + AsyncStorage persistence.
