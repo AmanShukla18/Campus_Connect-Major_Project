@@ -1,30 +1,26 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Switch } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Pressable, Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 const HERO_DEFAULT = require('../../assets/splash-icon.png');
 
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen({ navigation }: any) {
-  const { signIn, signInWithCredentials } = useAuth() as any;
+  const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const heroUrl = process.env.EXPO_PUBLIC_HERO_IMAGE_URL;
 
-  function onLogin() {
-    const e = email.trim().toLowerCase();
-    if (e === 'demo@gmail.com' && password === 'demo123') {
-      signIn('demo@gmail.com');
+  async function onLogin() {
+    try {
+      await signIn(email.trim().toLowerCase(), password);
+      // Navigate to the main app screen after successful login
       navigation.replace('GetStarted');
-      return;
-    }
-    const ok = signInWithCredentials(e, password);
-    if (ok) {
-      navigation.replace('GetStarted');
-    } else {
-      alert('Invalid credentials. Try demo@gmail.com / demo123 or create an account');
+    } catch (error: any) {
+      Alert.alert('Failed to login: ' + error.message);
     }
   }
 
@@ -40,32 +36,31 @@ export default function LoginScreen({ navigation }: any) {
       </View>
       <Text style={styles.welcome}>Welcome to CampusConnect</Text>
       <TextInput
-        placeholder="Email or Student ID"
+        placeholder="Email"
         value={email}
         onChangeText={setEmail}
         style={styles.input}
         autoCapitalize="none"
         keyboardType="email-address"
       />
-      <TextInput
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        style={styles.input}
-        secureTextEntry
-      />
-      <View style={styles.row}>
-        <Text style={styles.muted}>Remember me</Text>
-        <Switch value={remember} onValueChange={setRemember} />
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity>
-          <Text style={styles.link}>Forgot Password?</Text>
-        </TouchableOpacity>
+      <View style={styles.passwordContainer}>
+        <TextInput
+          placeholder="Password"
+          value={password}
+          onChangeText={setPassword}
+          style={styles.passwordInput}
+          secureTextEntry={!showPassword}
+        />
+        <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+          <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={24} color="#6b7280" />
+        </Pressable>
       </View>
       <TouchableOpacity style={styles.loginBtn} onPress={onLogin}>
         <Text style={{ color: '#fff', fontWeight: '700' }}>Login</Text>
       </TouchableOpacity>
-  <Text style={styles.signup}>Don't have an account? <Text style={styles.link} onPress={() => navigation.navigate('Signup')}>Sign Up</Text></Text>
+      <Text style={styles.signup}>
+        Don't have an account? <Text style={styles.link} onPress={() => navigation.navigate('Signup')}>Sign Up</Text>
+      </Text>
     </View>
   );
 }
@@ -85,11 +80,24 @@ const styles = StyleSheet.create({
     borderColor: '#e8ecf4',
     borderWidth: 1,
   },
-  row: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  muted: { color: '#6b7280', marginRight: 8 },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 22,
+    marginBottom: 12,
+    borderColor: '#e8ecf4',
+    borderWidth: 1,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  eyeIcon: {
+    paddingHorizontal: 16,
+  },
   link: { color: '#3b5bfd', fontWeight: '600' },
   loginBtn: { backgroundColor: '#3b5bfd', alignItems: 'center', paddingVertical: 16, borderRadius: 26, marginTop: 4 },
   signup: { textAlign: 'center', marginTop: 16, color: '#6b7280' },
 });
-
-

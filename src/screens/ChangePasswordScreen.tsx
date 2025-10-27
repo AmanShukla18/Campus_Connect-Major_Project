@@ -3,34 +3,32 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Pressable }
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 
-export default function SignupScreen({ navigation }: any) {
-  const { signUp } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+export default function ChangePasswordScreen({ navigation }: any) {
+  const { changePassword } = useAuth();
+  const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
-  async function doSignup() {
-    if (!email || !password) {
-      return Alert.alert('Missing', 'Please provide email and password');
+  async function doChangePassword() {
+    if (!newPassword) {
+      return Alert.alert('Missing', 'Please provide a new password');
     }
     try {
-      await signUp(email, password);
-      // After successful signup, navigate to Login so user may login
-      navigation.navigate('Login');
+      await changePassword(newPassword);
+      Alert.alert('Success', 'Password changed successfully');
+      navigation.goBack();
     } catch (error: any) {
-      Alert.alert('Signup Failed', error.message);
+      Alert.alert('Error', error.message);
     }
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Sign up</Text>
-      <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={styles.input} />
+      <Text style={styles.title}>Change Password</Text>
       <View style={styles.passwordContainer}>
         <TextInput
-          placeholder="Password"
-          value={password}
-          onChangeText={setPassword}
+          placeholder="New Password"
+          value={newPassword}
+          onChangeText={setNewPassword}
           style={styles.passwordInput}
           secureTextEntry={!showPassword}
         />
@@ -38,8 +36,8 @@ export default function SignupScreen({ navigation }: any) {
           <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={24} color="#6b7280" />
         </Pressable>
       </View>
-      <TouchableOpacity style={styles.btn} onPress={doSignup}>
-        <Text style={{ color: '#fff', fontWeight: '700' }}>Create account</Text>
+      <TouchableOpacity style={styles.btn} onPress={doChangePassword}>
+        <Text style={{ color: '#fff', fontWeight: '700' }}>Change Password</Text>
       </TouchableOpacity>
     </View>
   );
@@ -48,15 +46,6 @@ export default function SignupScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f5f8ff' },
   title: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
-  input: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#e5e9f2',
-  },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
