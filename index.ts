@@ -7,3 +7,4 @@ import App from './App';
 // the environment is set up appropriately
 registerRootComponent(App);
 //$env:EXPO_PUBLIC_API_URL='http://localhost:4000'; npm run web
+//npx expo start -c

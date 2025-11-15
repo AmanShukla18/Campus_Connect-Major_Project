@@ -9,6 +9,8 @@ export default function StudyGroupsScreen() {
   const { email } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [activeGroup, setActiveGroup] = useState<Group | null>(null);
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
   const [description, setDescription] = useState('');
@@ -51,6 +53,26 @@ export default function StudyGroupsScreen() {
     }
   }
 
+  async function leave(id: string) {
+    try {
+      await api.post(`/groups/${id}/leave`, { email });
+      setDetailVisible(false);
+      load();
+    } catch (e) {
+      alert('Failed to leave group');
+    }
+  }
+
+  async function removeGroup(id: string) {
+    try {
+      await api.delete(`/groups/${id}`, { params: { requester: email } });
+      setDetailVisible(false);
+      load();
+    } catch (e) {
+      alert('Failed to delete group');
+    }
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Study Groups</Text>
@@ -81,18 +103,39 @@ export default function StudyGroupsScreen() {
         data={groups}
         keyExtractor={(g) => g._id}
         renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            <Text style={{ color: '#6b7280' }}>{item.subject} • {item.members?.length || 0} members</Text>
-            {item.description && <Text style={{ color: '#4e5874' }}>{item.description}</Text>}
-            {item.meetingTime && <Text style={{ color: '#4e5874' }}>Meeting: {item.meetingTime}</Text>}
-            <TouchableOpacity style={styles.joinBtn} onPress={() => join(item._id)}>
-              <Text style={{ color: '#3b5bfd', fontWeight: '700' }}>Join</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => { setActiveGroup(item); setDetailVisible(true); }}>
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>{item.name}</Text>
+              <Text style={{ color: '#6b7280' }}>{item.subject} • {item.members?.length || 0} members</Text>
+              {item.description && <Text style={{ color: '#4e5874' }}>{item.description}</Text>}
+              {item.meetingTime && <Text style={{ color: '#4e5874' }}>Meeting: {item.meetingTime}</Text>}
+              <TouchableOpacity style={styles.joinBtn} onPress={() => join(item._id)}>
+                <Text style={{ color: '#3b5bfd', fontWeight: '700' }}>Join</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
         )}
         ListEmptyComponent={<Text style={{ color: '#6b7280', textAlign: 'center', marginTop: 16 }}>No groups yet.</Text>}
       />
+      {/* Detail modal */}
+      {detailVisible && activeGroup && (
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={{ fontWeight: '700', fontSize: 18 }}>{activeGroup.name}</Text>
+            <Text style={{ color: '#6b7280', marginBottom: 8 }}>{activeGroup.subject}</Text>
+            <Text style={{ marginBottom: 8 }}>{activeGroup.description}</Text>
+            <Text style={{ color: '#6b7280', marginBottom: 12 }}>Members ({activeGroup.members?.length || 0})</Text>
+            {activeGroup.members?.map((m) => (<Text key={m} style={{ paddingVertical: 4 }}>{m}</Text>))}
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setDetailVisible(false)}><Text style={{ color: '#3b5bfd' }}>Close</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => leave(activeGroup._id)}><Text style={{ color: '#3b5bfd' }}>Leave</Text></TouchableOpacity>
+              {activeGroup.createdByEmail === email && (
+                <TouchableOpacity style={styles.submitBtn} onPress={() => removeGroup(activeGroup._id)}><Text style={{ color: '#fff' }}>Delete</Text></TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }

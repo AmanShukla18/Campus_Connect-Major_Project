@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Switch } from 'react-native';
 
 const HERO_DEFAULT = require('../../assets/splash-icon.png');
+// College image (saved as 'krmu pic.jpg' in assets)
+let COLLEGE_IMG: any;
+try { COLLEGE_IMG = require('../../assets/krmu pic.jpg'); } catch (e) { COLLEGE_IMG = HERO_DEFAULT; }
 
 import { useAuth } from '../context/AuthContext';
 
@@ -20,23 +23,18 @@ export default function LoginScreen({ navigation }: any) {
       navigation.replace('GetStarted');
       return;
     }
-    const ok = signInWithCredentials(e, password);
-    if (ok) {
-      navigation.replace('GetStarted');
-    } else {
-      alert('Invalid credentials. Try demo@gmail.com / demo123 or create an account');
-    }
+    (async () => {
+      const ok = await signInWithCredentials(e, password);
+      if (ok) navigation.replace('GetStarted');
+      else alert('Invalid credentials. Try demo@gmail.com / demo123 or create an account');
+    })();
   }
 
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Login to CampusConnect</Text>
       <View style={styles.heroWrap}>
-        {heroUrl ? (
-          <Image source={{ uri: heroUrl }} style={styles.hero} resizeMode="cover" />
-        ) : (
-          <Image source={HERO_DEFAULT} style={styles.hero} resizeMode="cover" />
-        )}
+        <Image source={COLLEGE_IMG} style={styles.hero} resizeMode="cover" />
       </View>
       <Text style={styles.welcome}>Welcome to CampusConnect</Text>
       <TextInput

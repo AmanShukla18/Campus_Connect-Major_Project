@@ -1,60 +1,64 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { Platform } from 'react-native';
+import api from '../api/client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type AuthValue = {
   email: string | null;
   signIn: (email: string) => void;
   signOut: () => void;
-  signup: (email: string, password: string) => boolean;
-  signInWithCredentials: (email: string, password: string) => boolean;
+  signup: (email: string, password: string) => Promise<boolean>;
+  signInWithCredentials: (email: string, password: string) => Promise<boolean>;
 };
 
 const Ctx = createContext<AuthValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [email, setEmail] = useState<string | null>(null);
-  // simple credential store; for web persist in localStorage so accounts survive reloads
-  const [creds] = useState<Record<string, string>>(() => {
-    if (Platform.OS === 'web') {
-      try {
-        const raw = window.localStorage.getItem('cc_creds');
-        if (raw) return JSON.parse(raw);
-      } catch (e) {
-        // ignore
-      }
-    }
-    return {};
-  });
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
+    async function load() {
       try {
-        window.localStorage.setItem('cc_creds', JSON.stringify(creds));
+        if (Platform.OS === 'web') {
+          const u = window.localStorage.getItem('cc_user');
+          if (u) setEmail(u);
+        } else {
+          const u = await AsyncStorage.getItem('cc_user');
+          if (u) setEmail(u);
+        }
       } catch (e) {
         // ignore
       }
     }
-  }, [creds]);
+    load();
+  }, []);
 
-  function signup(email: string, password: string) {
-    if (creds[email]) return false; // already exists
-    // eslint-disable-next-line no-param-reassign
-    creds[email] = password;
-    setEmail(email);
-    if (Platform.OS === 'web') {
-      try { window.localStorage.setItem('cc_creds', JSON.stringify(creds)); } catch (e) {}
-      try { window.localStorage.setItem('cc_user', email); } catch (e) {}
+  async function signup(emailArg: string, password: string) {
+    try {
+      const res = await api.post('/signup', { email: emailArg, password });
+      if (res.status === 201) {
+        setEmail(emailArg);
+        if (Platform.OS === 'web') window.localStorage.setItem('cc_user', emailArg);
+        else await AsyncStorage.setItem('cc_user', emailArg);
+        return true;
+      }
+    } catch (e) {
+      return false;
     }
-    return true;
+    return false;
   }
 
-  function signInWithCredentials(emailArg: string, password: string) {
-    if (creds[emailArg] && creds[emailArg] === password) {
-      setEmail(emailArg);
-      if (Platform.OS === 'web') {
-        try { window.localStorage.setItem('cc_user', emailArg); } catch (e) {}
+  async function signInWithCredentials(emailArg: string, password: string) {
+    try {
+      const res = await api.post('/login', { email: emailArg, password });
+      if (res.status === 200) {
+        setEmail(emailArg);
+        if (Platform.OS === 'web') window.localStorage.setItem('cc_user', emailArg);
+        else await AsyncStorage.setItem('cc_user', emailArg);
+        return true;
       }
-      return true;
+    } catch (e) {
+      // ignore
     }
     return false;
   }
@@ -62,7 +66,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<AuthValue>(() => ({
     email,
     signIn: setEmail,
-    signOut: () => setEmail(null),
+    signOut: () => {
+      setEmail(null);
+      if (Platform.OS === 'web') {
+        try { window.localStorage.removeItem('cc_user'); } catch (e) {}
+      } else {
+        AsyncStorage.removeItem('cc_user').catch(() => {});
+      }
+    },
     signup,
     signInWithCredentials,
   }), [email]);

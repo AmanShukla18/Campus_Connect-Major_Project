@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
+let COLLEGE_IMG: any;
+try { COLLEGE_IMG = require('../../assets/krmu pic.jpg'); } catch (e) { COLLEGE_IMG = undefined; }
 import { useAuth } from '../context/AuthContext';
 
 export default function SignupScreen({ navigation }: any) {
@@ -9,14 +11,17 @@ export default function SignupScreen({ navigation }: any) {
 
   function doSignup() {
     if (!email || !password) return Alert.alert('Missing', 'Please provide email and password');
-    const ok = signup(email, password);
-    if (!ok) return Alert.alert('Exists', 'Account already exists');
-    // After successful signup, navigate to Login so user may login
-    navigation.navigate('Login');
+    (async () => {
+      const ok = await signup(email, password);
+      if (!ok) return Alert.alert('Exists', 'Account already exists or server error');
+      Alert.alert('Created', 'Account created. Please login');
+      navigation.navigate('Login');
+    })();
   }
 
   return (
     <View style={styles.container}>
+      {COLLEGE_IMG && <Image source={COLLEGE_IMG} style={{ width: '100%', height: 140, borderRadius: 12, marginBottom: 12 }} resizeMode="cover" />}
       <Text style={styles.title}>Sign up</Text>
       <TextInput placeholder="Email" value={email} onChangeText={setEmail} style={styles.input} />
       <TextInput placeholder="Password" value={password} secureTextEntry onChangeText={setPassword} style={styles.input} />

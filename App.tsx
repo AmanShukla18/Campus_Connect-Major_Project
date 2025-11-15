@@ -1,10 +1,10 @@
 import 'react-native-gesture-handler';
 import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/native';
-import { createDrawerNavigator } from '@react-navigation/drawer';
+import { createDrawerNavigator, DrawerContentScrollView, DrawerItemList } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { useColorScheme, View, Text } from 'react-native';
+import { useColorScheme } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 // Screens (placeholder implementations)
@@ -16,7 +16,8 @@ import EventsScreen from './src/screens/EventsScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import GetStartedScreen from './src/screens/GetStartedScreen';
-import { AuthProvider } from './src/context/AuthContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 import ReportFoundScreen from './src/screens/ReportFoundScreen';
 import UploadResourceScreen from './src/screens/UploadResourceScreen';
 import SignupScreen from './src/screens/SignupScreen';
@@ -27,9 +28,25 @@ const Stack = createNativeStackNavigator();
 export default function App() {
   const scheme = useColorScheme();
   function MainDrawer() {
+    const CustomDrawerContent = (props: any) => {
+      const { signOut } = useAuth();
+      return (
+        <DrawerContentScrollView {...props} contentContainerStyle={{ flex: 1, paddingBottom: 12 }}>
+          <DrawerItemList {...props} />
+          <View style={{ flex: 1 }} />
+          <View style={{ padding: 12 }}>
+            <TouchableOpacity style={styles.drawerLogout} onPress={() => { signOut(); props.navigation.replace('Login'); }}>
+              <Text style={{ color: '#ef4444', fontWeight: '700' }}>Logout</Text>
+            </TouchableOpacity>
+          </View>
+        </DrawerContentScrollView>
+      );
+    };
+
     return (
       <Drawer.Navigator
         initialRouteName="Notices"
+        drawerContent={(props) => <CustomDrawerContent {...props} />}
         screenOptions={{
           headerStyle: { backgroundColor: '#0b1220' },
           headerTintColor: '#fff',
@@ -66,3 +83,7 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  drawerLogout: { backgroundColor: '#ffeef0', borderRadius: 8, paddingVertical: 10, alignItems: 'center' },
+});
