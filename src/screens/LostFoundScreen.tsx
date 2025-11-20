@@ -1,42 +1,79 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
-import api from '../api/client';
+import { View, Text, FlatList, StyleSheet, TouchableOpacity, Image, Alert } from 'react-native';
+import { onValue, ref, remove as removeEntry, update } from 'firebase/database';
 import { useAuth } from '../context/AuthContext';
+import { realtimeDb, auth } from '../lib/firebase';
+import { InlineVideo } from '../components/InlineVideo';
 
 type Item = {
-  _id: string;
+  id: string;
   title: string;
   description?: string;
   location?: string;
   contact?: string;
   status?: string;
   date?: string;
+  reportedByEmail?: string;
+  reportedByUid?: string;
+  mediaUrl?: string;
+  mediaType?: 'image' | 'video';
 };
 
 export default function LostFoundScreen({ navigation }: any) {
   const { email } = useAuth();
   const [items, setItems] = useState<Item[]>([]);
   const [filter, setFilter] = useState<'All' | 'Active' | 'Claimed'>('All');
-
-  async function load() {
-    const res = await api.get<Item[]>('/lostfound');
-    setItems(res.data);
-  }
-
-  async function claim(id: string) {
-    await api.patch(`/lostfound/${id}/claim`);
-    load();
-  }
-
   useEffect(() => {
-    load();
-    const t = setInterval(load, 4000); // simple polling for realtime-ish updates
-    return () => clearInterval(t);
+    const dbRef = ref(realtimeDb, 'lostfound');
+    const unsubscribe = onValue(dbRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      const nextItems: Item[] = Object.keys(data).map((key) => {
+        const entry = data[key] as any;
+        const mediaUrl = entry.mediaUrl || entry.imageUrl;
+        const mediaType = entry.mediaType || (mediaUrl ? 'image' : undefined);
+        return { id: key, ...entry, mediaUrl, mediaType };
+      });
+      nextItems.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      setItems(nextItems);
+    });
+    return () => unsubscribe();
   }, []);
 
-  async function remove(id: string) {
-    await api.delete(`/lostfound/${id}`, { params: { reporter: email || '' } });
-    load();
+  async function claim(id: string) {
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert('Sign in required', 'Please sign in to mark an item as claimed.');
+      return;
+    }
+
+    try {
+      await update(ref(realtimeDb, `lostfound/${id}`), { status: 'Claimed', claimedByUid: user.uid, claimedAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error('Failed to mark item claimed', error);
+      Alert.alert('Error', error?.message || 'Unable to update item.');
+    }
+  }
+
+  async function remove(item: Item) {
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert('Sign in required', 'Please sign in to delete your items.');
+      return;
+    }
+
+    const ownsByUid = item.reportedByUid && item.reportedByUid === user.uid;
+    const ownsByEmail = !item.reportedByUid && item.reportedByEmail && item.reportedByEmail === (user.email || email);
+    if (!ownsByUid && !ownsByEmail) {
+      Alert.alert('Permission denied', 'You can only delete items you posted.');
+      return;
+    }
+
+    try {
+      await removeEntry(ref(realtimeDb, `lostfound/${item.id}`));
+    } catch (error: any) {
+      console.error('Failed to delete item', error);
+      Alert.alert('Error', error?.message || 'Unable to delete item.');
+    }
   }
 
   return (
@@ -53,10 +90,17 @@ export default function LostFoundScreen({ navigation }: any) {
       </View>
       <FlatList
         data={items.filter(i => filter==='All' ? true : i.status===filter)}
-        keyExtractor={(n) => n._id}
+        keyExtractor={(n) => n.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{item.title}</Text>
+            {item.mediaUrl && (
+              item.mediaType === 'video' ? (
+                <InlineVideo uri={item.mediaUrl} style={styles.cardVideo} />
+              ) : (
+                <Image source={{ uri: item.mediaUrl }} style={styles.cardImage} />
+              )
+            )}
             {!!item.description && <Text style={styles.cardBody}>{item.description}</Text>}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, alignItems: 'center' }}>
               <View>
@@ -65,12 +109,12 @@ export default function LostFoundScreen({ navigation }: any) {
               </View>
               <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
                 {item.status !== 'Claimed' && (
-                  <TouchableOpacity onPress={() => claim(item._id)}>
+                  <TouchableOpacity onPress={() => claim(item.id)}>
                     <Text style={{ color: '#3b5bfd', fontWeight: '600' }}>Mark Claimed</Text>
                   </TouchableOpacity>
                 )}
                 {email && item.reportedByEmail === email && (
-                  <TouchableOpacity onPress={() => remove(item._id)}>
+                  <TouchableOpacity onPress={() => remove(item)}>
                     <Text style={{ color: '#ef4444', fontWeight: '700' }}>Delete</Text>
                   </TouchableOpacity>
                 )}
@@ -104,6 +148,8 @@ const styles = StyleSheet.create({
     borderColor: '#e6e9f3',
   },
   cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
+  cardImage: { width: '100%', height: 160, borderRadius: 12, marginBottom: 8, backgroundColor: '#dbe5ff' },
+  cardVideo: { width: '100%', height: 200, borderRadius: 12, marginBottom: 8, backgroundColor: '#000' },
   cardBody: { color: '#4e5874' },
   empty: { textAlign: 'center', color: '#6b7280', marginTop: 24 },
   filters: { flexDirection: 'row', gap: 8, marginBottom: 10 },

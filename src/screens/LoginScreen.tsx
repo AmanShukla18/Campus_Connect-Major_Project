@@ -9,25 +9,22 @@ try { COLLEGE_IMG = require('../../assets/krmu pic.jpg'); } catch (e) { COLLEGE_
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen({ navigation }: any) {
-  const { signIn, signInWithCredentials } = useAuth() as any;
+  const { signInWithCredentials } = useAuth() as any;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [remember, setRemember] = useState(false);
 
   const heroUrl = process.env.EXPO_PUBLIC_HERO_IMAGE_URL;
 
-  function onLogin() {
+  async function onLogin() {
     const e = email.trim().toLowerCase();
-    if (e === 'demo@gmail.com' && password === 'demo123') {
-      signIn('demo@gmail.com');
-      navigation.replace('GetStarted');
+    if (!e || !password) {
+      alert('Enter email and password');
       return;
     }
-    (async () => {
-      const ok = await signInWithCredentials(e, password);
-      if (ok) navigation.replace('GetStarted');
-      else alert('Invalid credentials. Try demo@gmail.com / demo123 or create an account');
-    })();
+    const ok = await signInWithCredentials(e, password);
+    if (ok) navigation.replace('GetStarted');
+    else alert('Invalid credentials. Please try again or sign up.');
   }
 
   return (

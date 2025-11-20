@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert } from 'react-native';
-import api from '../api/client';
-import { Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { firestore } from '../lib/firebase';
+import { uploadMedia } from '../lib/upload';
 
 export default function UploadResourceScreen({ navigation }: any) {
   const [title, setTitle] = useState('');
@@ -10,15 +11,26 @@ export default function UploadResourceScreen({ navigation }: any) {
   const [uploading, setUploading] = useState(false);
   const [urlInput, setUrlInput] = useState('');
 
+  async function saveResource(url: string) {
+    const finalTitle = title || url.split('/').pop() || 'Resource';
+    await addDoc(collection(firestore, 'resources'), {
+      title: finalTitle,
+      subject,
+      year,
+      url,
+      createdAt: serverTimestamp(),
+    });
+    Alert.alert('Uploaded', 'Resource added successfully');
+    navigation.goBack();
+  }
+
   async function pickAndUpload() {
     // Web fallback: ask user to paste a direct URL and submit
     if (Platform.OS === 'web') {
       if (!urlInput) return Alert.alert('Missing URL', 'Paste a direct URL to the file (PDF, etc.)');
       setUploading(true);
       try {
-        await api.post('/resources', { title, subject, year, url: urlInput });
-        Alert.alert('Uploaded', 'Resource added successfully');
-        navigation.goBack();
+        await saveResource(urlInput);
       } catch (e: any) {
         Alert.alert('Upload failed', e.message || 'Could not add resource');
       } finally {
@@ -32,13 +44,8 @@ export default function UploadResourceScreen({ navigation }: any) {
       const DocumentPicker = (await import('react-native-document-picker')).default;
       const res = await DocumentPicker.pickSingle({ type: DocumentPicker.types.allFiles });
       setUploading(true);
-      const formData = new FormData();
-      // react-native FormData file object -> cast to any to satisfy TS in this project
-      (formData as any).append('file', { uri: res.uri, name: res.name, type: res.type } as any);
-      const uploadRes = await api.post('/upload', formData as any, { headers: { 'Content-Type': 'multipart/form-data' } });
-      await api.post('/resources', { title, subject, year, url: uploadRes.data.url });
-      Alert.alert('Uploaded', 'Resource uploaded successfully');
-      navigation.goBack();
+      const uploadRes = await uploadMedia({ uri: res.uri, name: res.name || `resource-${Date.now()}`, type: res.type || 'application/octet-stream' });
+      await saveResource(uploadRes.url);
     } catch (e: any) {
       // DocumentPicker throws a special error on cancel — check shape dynamically
       if (e && e.code === 'DOCUMENT_PICKER_CANCELED') return;

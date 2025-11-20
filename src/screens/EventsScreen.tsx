@@ -1,19 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet } from 'react-native';
-import api from '../api/client';
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { firestore } from '../lib/firebase';
 
-type Event = { _id: string; title: string; date?: string; location?: string };
+type Event = { id: string; title: string; date?: string; location?: string };
 
 export default function EventsScreen() {
   const [items, setItems] = useState<Event[]>([]);
 
-  async function load() {
-    const res = await api.get<Event[]>('/events');
-    setItems(res.data);
-  }
-
   useEffect(() => {
-    load();
+    const q = query(collection(firestore, 'events'), orderBy('date', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setItems(
+        snapshot.docs.map((doc) => {
+          const data = doc.data();
+          const rawDate = data.date as any;
+          const dateValue = typeof rawDate?.toDate === 'function' ? rawDate.toDate().toISOString() : rawDate;
+          return {
+            id: doc.id,
+            title: data.title as string,
+            date: dateValue,
+            location: data.location as string | undefined,
+          } as Event;
+        })
+      );
+    });
+    return unsubscribe;
   }, []);
 
   return (
@@ -21,7 +33,7 @@ export default function EventsScreen() {
       <Text style={styles.title}>Events</Text>
       <FlatList
         data={items}
-        keyExtractor={(n) => n._id}
+        keyExtractor={(n) => n.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{item.title}</Text>

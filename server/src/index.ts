@@ -7,6 +7,7 @@ import path from 'path';
 import multer from 'multer';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
+import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 
 dotenv.config();
 
@@ -35,17 +36,38 @@ app.use((req, _res, next) => {
   next();
 });
 
-// ensure uploads folder exists
+// ensure uploads folder exists for legacy files served statically
 const uploadsDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 app.use('/uploads', express.static(uploadsDir));
 
-// configure multer for file uploads
-const storage = multer.diskStorage({
-  destination: (_req: Request, _file: Express.Multer.File, cb: (err: Error | null, dest: string) => void) => cb(null, uploadsDir),
-  filename: (_req: Request, file: Express.Multer.File, cb: (err: Error | null, filename: string) => void) => cb(null, `${Date.now()}-${file.originalname.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`),
+// Cloudinary configuration
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME || '',
+  api_key: process.env.CLOUDINARY_API_KEY || '',
+  api_secret: process.env.CLOUDINARY_API_SECRET || '',
+  secure: true,
 });
-const upload = multer({ storage });
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+async function uploadToCloudinary(file: Express.Multer.File): Promise<UploadApiResponse> {
+  if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    throw new Error('Cloudinary credentials are not configured');
+  }
+
+  const folder = process.env.CLOUDINARY_FOLDER || 'campusconnect/uploads';
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      { folder, resource_type: 'auto' },
+      (error, result) => {
+        if (error || !result) return reject(error || new Error('No upload result'));
+        resolve(result);
+      }
+    );
+    stream.end(file.buffer);
+  });
+}
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/campusconnect';
 const PORT = process.env.PORT || 4000;
@@ -209,11 +231,16 @@ app.post('/api/login', async (req, res) => {
 });
 
 // upload endpoint: accepts multipart/form-data 'file' and returns { url }
-app.post('/api/upload', upload.single('file'), async (req: any, res: any) => {
-  if (!req.file) return res.status(400).json({ error: 'No file' });
-  // return a publicly accessible URL
-  const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ url });
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  const file = (req as Request & { file?: Express.Multer.File }).file;
+  if (!file) return res.status(400).json({ error: 'No file provided' });
+  try {
+    const result = await uploadToCloudinary(file);
+    return res.json({ url: result.secure_url, publicId: result.public_id });
+  } catch (error) {
+    console.error('Cloudinary upload failed', error);
+    return res.status(500).json({ error: 'Upload failed' });
+  }
 });
 
 // Study Groups API

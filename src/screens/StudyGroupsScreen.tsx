@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity } from 'react-native';
-import api from '../api/client';
+import { View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity, Alert } from 'react-native';
+import { addDoc, arrayRemove, arrayUnion, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { firestore } from '../lib/firebase';
 
-type Group = { _id: string; name: string; subject?: string; members?: string[]; createdByEmail?: string; description?: string; meetingTime?: string };
+type Group = { id: string; name: string; subject?: string; members?: string[]; createdByEmail?: string; description?: string; meetingTime?: string };
 
 export default function StudyGroupsScreen() {
   const { email } = useAuth();
@@ -16,48 +17,50 @@ export default function StudyGroupsScreen() {
   const [description, setDescription] = useState('');
   const [meetingTime, setMeetingTime] = useState('');
 
-  async function load() {
-    try {
-      const res = await api.get<Group[]>('/groups');
-      setGroups(res.data);
-    } catch (e) {
-      console.warn('Failed to load groups', e);
-    }
-  }
-
   useEffect(() => {
-    load();
+    const qGroups = query(collection(firestore, 'groups'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(qGroups, (snapshot) => {
+      setGroups(snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...(docSnap.data() as Omit<Group, 'id'>) })));
+    });
+    return unsubscribe;
   }, []);
 
   async function create() {
     if (!name) return;
     try {
-      await api.post('/groups', { name, subject, description, meetingTime, createdByEmail: email });
+      await addDoc(collection(firestore, 'groups'), {
+        name,
+        subject,
+        description,
+        meetingTime,
+        createdByEmail: email,
+        members: email ? [email] : [],
+        createdAt: serverTimestamp(),
+      });
       setName('');
       setSubject('');
       setDescription('');
       setMeetingTime('');
       setModalVisible(false);
-      load();
     } catch (e) {
       alert('Failed to create group');
     }
   }
 
   async function join(id: string) {
+    if (!email) return Alert.alert('Sign in required', 'You need to be logged in to join groups.');
     try {
-      await api.post(`/groups/${id}/join`, { email });
-      load();
+      await updateDoc(doc(firestore, 'groups', id), { members: arrayUnion(email) });
     } catch (e) {
       alert('Failed to join group');
     }
   }
 
   async function leave(id: string) {
+    if (!email) return;
     try {
-      await api.post(`/groups/${id}/leave`, { email });
+      await updateDoc(doc(firestore, 'groups', id), { members: arrayRemove(email) });
       setDetailVisible(false);
-      load();
     } catch (e) {
       alert('Failed to leave group');
     }
@@ -65,9 +68,8 @@ export default function StudyGroupsScreen() {
 
   async function removeGroup(id: string) {
     try {
-      await api.delete(`/groups/${id}`, { params: { requester: email } });
+      await deleteDoc(doc(firestore, 'groups', id));
       setDetailVisible(false);
-      load();
     } catch (e) {
       alert('Failed to delete group');
     }
@@ -101,7 +103,7 @@ export default function StudyGroupsScreen() {
       )}
       <FlatList
         data={groups}
-        keyExtractor={(g) => g._id}
+        keyExtractor={(g) => g.id}
         renderItem={({ item }) => (
           <TouchableOpacity onPress={() => { setActiveGroup(item); setDetailVisible(true); }}>
             <View style={styles.card}>
@@ -109,7 +111,7 @@ export default function StudyGroupsScreen() {
               <Text style={{ color: '#6b7280' }}>{item.subject} • {item.members?.length || 0} members</Text>
               {item.description && <Text style={{ color: '#4e5874' }}>{item.description}</Text>}
               {item.meetingTime && <Text style={{ color: '#4e5874' }}>Meeting: {item.meetingTime}</Text>}
-              <TouchableOpacity style={styles.joinBtn} onPress={() => join(item._id)}>
+              <TouchableOpacity style={styles.joinBtn} onPress={() => join(item.id)}>
                 <Text style={{ color: '#3b5bfd', fontWeight: '700' }}>Join</Text>
               </TouchableOpacity>
             </View>
@@ -128,9 +130,9 @@ export default function StudyGroupsScreen() {
             {activeGroup.members?.map((m) => (<Text key={m} style={{ paddingVertical: 4 }}>{m}</Text>))}
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setDetailVisible(false)}><Text style={{ color: '#3b5bfd' }}>Close</Text></TouchableOpacity>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => leave(activeGroup._id)}><Text style={{ color: '#3b5bfd' }}>Leave</Text></TouchableOpacity>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => leave(activeGroup.id)}><Text style={{ color: '#3b5bfd' }}>Leave</Text></TouchableOpacity>
               {activeGroup.createdByEmail === email && (
-                <TouchableOpacity style={styles.submitBtn} onPress={() => removeGroup(activeGroup._id)}><Text style={{ color: '#fff' }}>Delete</Text></TouchableOpacity>
+                <TouchableOpacity style={styles.submitBtn} onPress={() => removeGroup(activeGroup.id)}><Text style={{ color: '#fff' }}>Delete</Text></TouchableOpacity>
               )}
             </View>
           </View>

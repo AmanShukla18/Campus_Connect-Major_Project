@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, TextInput, TouchableOpacity, Linking } from 'react-native';
-import api from '../api/client';
 import { useNavigation } from '@react-navigation/native';
+import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import { firestore } from '../lib/firebase';
 
 type Resource = {
-  _id: string;
+  id: string;
   title: string;
   subject?: string;
   year?: string;
@@ -18,19 +19,28 @@ export default function ResourcesScreen() {
   const [quickUrl, setQuickUrl] = useState('');
   const [adding, setAdding] = useState(false);
 
-  async function load() {
-    const res = await api.get<Resource[]>('/resources', { params: { q } });
-    setItems(res.data);
-  }
-
   useEffect(() => {
-    load();
+    const qResources = query(collection(firestore, 'resources'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(qResources, (snapshot) => {
+      setItems(snapshot.docs.map((doc) => ({ id: doc.id, ...(doc.data() as Omit<Resource, 'id'>) })));
+    });
+    return unsubscribe;
   }, []);
+
+  const filteredResources = useMemo(() => {
+    if (!q) return items;
+    const needle = q.toLowerCase();
+    return items.filter((item) =>
+      [item.title, item.subject, item.year]
+        .filter(Boolean)
+        .some((field) => (field || '').toLowerCase().includes(needle))
+    );
+  }, [items, q]);
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Resources</Text>
-      <TextInput placeholder="Search by title, subject, year..." value={q} onChangeText={setQ} onSubmitEditing={load} style={styles.input} />
+      <TextInput placeholder="Search by title, subject, year..." value={q} onChangeText={setQ} style={styles.input} />
       <View style={styles.row}>
         <TouchableOpacity style={styles.upload} onPress={() => navigation.navigate('UploadResource' as any)}>
           <Text style={{ color: '#fff', fontWeight: '700' }}>Upload</Text>
@@ -42,9 +52,12 @@ export default function ResourcesScreen() {
         if (!quickUrl) return;
         setAdding(true);
         try {
-          await api.post('/resources', { title: quickUrl.split('/').pop() || 'Resource', url: quickUrl });
+          await addDoc(collection(firestore, 'resources'), {
+            title: quickUrl.split('/').pop() || 'Resource',
+            url: quickUrl,
+            createdAt: serverTimestamp(),
+          });
           setQuickUrl('');
-          load();
         } catch (e) {
           alert('Failed to add URL');
         } finally { setAdding(false); }
@@ -52,8 +65,8 @@ export default function ResourcesScreen() {
         <Text style={{ color: '#fff', fontWeight: '700' }}>{adding ? 'Adding...' : 'Add URL'}</Text>
       </TouchableOpacity>
       <FlatList
-        data={items}
-        keyExtractor={(n) => n._id}
+        data={filteredResources}
+        keyExtractor={(n) => n.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{item.title}</Text>

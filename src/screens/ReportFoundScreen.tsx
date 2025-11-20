@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Alert } from 'react-native';
-import { launchImageLibrary } from 'react-native-image-picker';
-import api from '../api/client';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Image, Alert, Platform } from 'react-native';
+import { push, ref, serverTimestamp } from 'firebase/database';
 import { useAuth } from '../context/AuthContext';
+import { realtimeDb, auth } from '../lib/firebase';
+import { uploadMedia } from '../lib/upload';
+import { pickMedia, MediaSource } from '../lib/mediaPicker';
+import { InlineVideo } from '../components/InlineVideo';
 
 export default function ReportFoundScreen({ navigation }: any) {
   const { email } = useAuth();
@@ -10,48 +13,103 @@ export default function ReportFoundScreen({ navigation }: any) {
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [contact, setContact] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
-  const [imageUploading, setImageUploading] = useState(false);
+  const [mediaUrl, setMediaUrl] = useState('');
+  const [mediaType, setMediaType] = useState<'image' | 'video' | null>(null);
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   async function submit() {
-    await api.post('/lostfound', { title, description, location, contact, imageUrl, reportedByEmail: email });
-    navigation.goBack();
-  }
-
-  async function pickImage() {
-    const result = await launchImageLibrary({ mediaType: 'photo', quality: 0.7 });
-    if (result.didCancel) return;
-    if (result.errorCode) {
-      Alert.alert('Error', result.errorMessage || 'Could not select image');
+    if (mediaUploading) {
+      Alert.alert('Please wait', 'Media is still uploading.');
       return;
     }
-    if (result.assets && result.assets.length > 0) {
-      const asset = result.assets[0];
-      if (asset.uri) {
-        setImageUploading(true);
-        // Upload image to server (replace with your upload logic)
-        try {
-          const formData = new FormData();
-          // react-native FormData file object -> cast to any to satisfy TS in this project
-          (formData as any).append('file', { uri: asset.uri, type: asset.type, name: asset.fileName } as any);
-          const uploadRes = await api.post('/upload', formData as any, { headers: { 'Content-Type': 'multipart/form-data' } });
-          setImageUrl(uploadRes.data.url);
-        } catch (e) {
-          Alert.alert('Upload failed', 'Could not upload image.');
-        }
-        setImageUploading(false);
-      }
+
+    if (!title.trim() || !location.trim() || !contact.trim()) {
+      Alert.alert('Missing info', 'Title, location and contact are required.');
+      return;
     }
+
+    if (!mediaUrl) {
+      Alert.alert('Add media', 'Upload an image or video before submitting.');
+      return;
+    }
+
+    const user = auth.currentUser;
+    if (!user) {
+      Alert.alert('Not signed in', 'Please sign in again to continue.');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await push(ref(realtimeDb, 'lostfound'), {
+        title: title.trim(),
+        description: description.trim(),
+        location: location.trim(),
+        contact: contact.trim(),
+        mediaUrl,
+        mediaType,
+        status: 'Active',
+        date: new Date().toISOString(),
+        reportedByEmail: email || user.email,
+        reportedByUid: user.uid,
+        createdAt: serverTimestamp(),
+      });
+      navigation.goBack();
+    } catch (error: any) {
+      console.error('Failed to submit lost item', error);
+      Alert.alert('Submission failed', error?.message || 'Could not save your report.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleMediaSelection(source: MediaSource) {
+    setMediaUploading(true);
+    try {
+      const asset = await pickMedia(source);
+      if (!asset) return;
+      const uploadRes = await uploadMedia({
+        uri: asset.uri,
+        mimeType: asset.mimeType,
+        fileName: asset.fileName,
+        mediaType: asset.type,
+      });
+      setMediaUrl(uploadRes.url);
+      setMediaType(asset.type);
+    } catch (e: any) {
+      console.error('pickMedia error', e);
+      Alert.alert('Upload failed', e?.message || 'Could not upload media.');
+    } finally {
+      setMediaUploading(false);
+    }
+  }
+
+  function chooseMediaSource() {
+    if (Platform.OS === 'web') {
+      handleMediaSelection('library');
+      return;
+    }
+
+    Alert.alert('Add media', 'Choose a source', [
+      { text: 'Gallery', onPress: () => handleMediaSelection('library') },
+      { text: 'Camera', onPress: () => handleMediaSelection('camera') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   }
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Report Found Item</Text>
-      <TouchableOpacity style={styles.imageBox} onPress={pickImage} disabled={imageUploading}>
-        {imageUrl ? (
-          <Image source={{ uri: imageUrl }} style={{ width: 100, height: 100, borderRadius: 10 }} />
+      <TouchableOpacity style={styles.imageBox} onPress={chooseMediaSource} disabled={mediaUploading}>
+        {mediaUrl ? (
+          mediaType === 'video' ? (
+            <InlineVideo uri={mediaUrl} style={{ width: 140, height: 120, borderRadius: 10 }} />
+          ) : (
+            <Image source={{ uri: mediaUrl }} style={{ width: 100, height: 100, borderRadius: 10 }} />
+          )
         ) : (
-          <Text style={{ color: '#8da2c0' }}>{imageUploading ? 'Uploading...' : 'Tap to add image'}</Text>
+          <Text style={{ color: '#8da2c0' }}>{mediaUploading ? 'Uploading...' : 'Tap to add image or video'}</Text>
         )}
       </TouchableOpacity>
       <TextInput placeholder="Title (e.g. Black Wallet)" value={title} onChangeText={setTitle} style={styles.input} />
@@ -59,11 +117,11 @@ export default function ReportFoundScreen({ navigation }: any) {
       <TextInput placeholder="Location (where it was found)" value={location} onChangeText={setLocation} style={styles.input} />
       <TextInput placeholder="Contact (phone or email)" value={contact} onChangeText={setContact} style={styles.input} />
       <View style={styles.row}>
-        <TouchableOpacity style={styles.cancel} onPress={() => navigation.goBack()}>
-          <Text style={{ color: '#3b5bfd' }}>Cancel</Text>
+        <TouchableOpacity style={styles.cancel} onPress={() => navigation.goBack()} disabled={submitting}>
+          <Text style={{ color: '#3b5bfd', opacity: submitting ? 0.6 : 1 }}>Cancel</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.submit} onPress={submit}>
-          <Text style={{ color: '#fff', fontWeight: '700' }}>Submit</Text>
+        <TouchableOpacity style={[styles.submit, submitting && { opacity: 0.7 }]} onPress={submit} disabled={submitting}>
+          <Text style={{ color: '#fff', fontWeight: '700' }}>{submitting ? 'Submitting...' : 'Submit'}</Text>
         </TouchableOpacity>
       </View>
     </View>

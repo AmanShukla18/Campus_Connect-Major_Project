@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, TextInput, StyleSheet, TouchableOpacity, Modal } from 'react-native';
-import api from '../api/client';
+import { addDoc, collection, onSnapshot, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { firestore } from '../lib/firebase';
 
 type Notice = {
-  _id: string;
+  id: string;
   title: string;
   department?: string;
   year?: string;
   type?: string;
   content?: string;
-  createdAt?: string;
+  createdAt?: Date;
 };
 
 export default function NoticesScreen() {
@@ -21,14 +22,36 @@ export default function NoticesScreen() {
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
 
-  async function load() {
-    const res = await api.get<Notice[]>('/notices', { params: { q: search } });
-    setItems(res.data);
-  }
-
   useEffect(() => {
-    load();
+    const q = query(collection(firestore, 'notices'), orderBy('createdAt', 'desc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setItems(
+        snapshot.docs.map((doc) => {
+          const data = doc.data();
+          return {
+            id: doc.id,
+            title: data.title as string,
+            department: data.department,
+            year: data.year,
+            type: data.type,
+            content: data.content,
+            createdAt: data.createdAt?.toDate?.() ?? undefined,
+          } as Notice;
+        })
+      );
+    });
+    return unsubscribe;
   }, []);
+
+  const filteredItems = useMemo(() => {
+    if (!search) return items;
+    const needle = search.toLowerCase();
+    return items.filter((notice) =>
+      [notice.title, notice.content, notice.department, notice.type]
+        .filter(Boolean)
+        .some((field) => (field || '').toLowerCase().includes(needle))
+    );
+  }, [items, search]);
 
   return (
     <View style={styles.container}>
@@ -37,12 +60,11 @@ export default function NoticesScreen() {
         placeholder="Search notices, keywords, department..."
         value={search}
         onChangeText={setSearch}
-        onSubmitEditing={load}
         style={styles.input}
       />
       <FlatList
-        data={items}
-        keyExtractor={(n) => n._id}
+        data={filteredItems}
+        keyExtractor={(n) => n.id}
         contentContainerStyle={{ paddingBottom: 32 }}
         renderItem={({ item }) => (
           <View style={styles.card}>
@@ -66,7 +88,24 @@ export default function NoticesScreen() {
               <TouchableOpacity style={[styles.fab, { position: 'relative', backgroundColor: '#eaf0ff' }]} onPress={() => setModal(false)}>
                 <Text style={{ color: '#3b5bfd', fontWeight: '700' }}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.fab, { position: 'relative' }]} onPress={async () => { await api.post('/notices', { title: newTitle, content: newContent, department: 'All', type: 'General', year: 'All' }); setModal(false); setNewTitle(''); setNewContent(''); load(); }}>
+              <TouchableOpacity
+                style={[styles.fab, { position: 'relative' }]}
+                onPress={async () => {
+                  if (!newTitle) return;
+                  await addDoc(collection(firestore, 'notices'), {
+                    title: newTitle,
+                    content: newContent,
+                    department: 'All',
+                    type: 'General',
+                    year: 'All',
+                    createdAt: serverTimestamp(),
+                    createdBy: email,
+                  });
+                  setModal(false);
+                  setNewTitle('');
+                  setNewContent('');
+                }}
+              >
                 <Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text>
               </TouchableOpacity>
             </View>
