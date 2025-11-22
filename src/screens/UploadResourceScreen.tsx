@@ -1,30 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Platform } from 'react-native';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { firestore } from '../lib/firebase';
-import { uploadMedia } from '../lib/upload';
+import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../api/client';
 
 export default function UploadResourceScreen({ navigation }: any) {
+  const { userProfile } = useAuth();
   const [title, setTitle] = useState('');
   const [subject, setSubject] = useState('');
   const [year, setYear] = useState('');
   const [uploading, setUploading] = useState(false);
   const [urlInput, setUrlInput] = useState('');
 
+  const isTeacher = userProfile?.designation === 'Teacher';
+
+  useEffect(() => {
+    // Check if user is a teacher
+    if (!isTeacher) {
+      Alert.alert(
+        'Access Restricted',
+        'Only teachers and faculty members can upload resources.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }]
+      );
+    }
+  }, [isTeacher]);
+
   async function saveResource(url: string) {
-    const finalTitle = title || url.split('/').pop() || 'Resource';
-    await addDoc(collection(firestore, 'resources'), {
-      title: finalTitle,
-      subject,
-      year,
-      url,
-      createdAt: serverTimestamp(),
-    });
-    Alert.alert('Uploaded', 'Resource added successfully');
-    navigation.goBack();
+    if (!isTeacher) {
+      Alert.alert('Access Denied', 'Only teachers can upload resources');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/resources`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: title || url.split('/').pop() || 'Resource',
+          subject,
+          year,
+          url,
+          department: userProfile?.school,
+          school: userProfile?.school,
+        }),
+      });
+
+      if (response.ok) {
+        Alert.alert('Uploaded', 'Resource added successfully');
+        navigation.goBack();
+      } else {
+        Alert.alert('Error', 'Failed to upload resource');
+      }
+    } catch (e: any) {
+      Alert.alert('Upload failed', e.message || 'Could not add resource');
+    }
   }
 
   async function pickAndUpload() {
+    if (!isTeacher) {
+      Alert.alert('Access Denied', 'Only teachers can upload resources');
+      return;
+    }
+
     // Web fallback: ask user to paste a direct URL and submit
     if (Platform.OS === 'web') {
       if (!urlInput) return Alert.alert('Missing URL', 'Paste a direct URL to the file (PDF, etc.)');
@@ -44,8 +80,26 @@ export default function UploadResourceScreen({ navigation }: any) {
       const DocumentPicker = (await import('react-native-document-picker')).default;
       const res = await DocumentPicker.pickSingle({ type: DocumentPicker.types.allFiles });
       setUploading(true);
-      const uploadRes = await uploadMedia({ uri: res.uri, name: res.name || `resource-${Date.now()}`, type: res.type || 'application/octet-stream' });
-      await saveResource(uploadRes.url);
+
+      // Upload to backend
+      const formData = new FormData();
+      formData.append('file', {
+        uri: res.uri,
+        name: res.name || `resource-${Date.now()}`,
+        type: res.type || 'application/octet-stream',
+      } as any);
+
+      const uploadResponse = await fetch(`${API_BASE_URL}/api/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (uploadResponse.ok) {
+        const uploadData = await uploadResponse.json();
+        await saveResource(uploadData.url);
+      } else {
+        Alert.alert('Error', 'Failed to upload file');
+      }
     } catch (e: any) {
       // DocumentPicker throws a special error on cancel — check shape dynamically
       if (e && e.code === 'DOCUMENT_PICKER_CANCELED') return;
@@ -55,9 +109,27 @@ export default function UploadResourceScreen({ navigation }: any) {
     }
   }
 
+  if (!isTeacher) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.restrictedContainer}>
+          <Text style={styles.restrictedIcon}>🔒</Text>
+          <Text style={styles.restrictedTitle}>Access Restricted</Text>
+          <Text style={styles.restrictedText}>
+            Only teachers and faculty members can upload resources.
+          </Text>
+          <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Upload Resource</Text>
+      <Text style={styles.subtitle}>Share educational materials with students</Text>
       <TextInput placeholder="Title" value={title} onChangeText={setTitle} style={styles.input} />
       <TextInput placeholder="Subject" value={subject} onChangeText={setSubject} style={styles.input} />
       <TextInput placeholder="Year" value={year} onChangeText={setYear} style={styles.input} />
@@ -79,7 +151,36 @@ export default function UploadResourceScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f5f8ff' },
-  title: { fontSize: 24, fontWeight: '700', marginBottom: 12 },
+  title: { fontSize: 24, fontWeight: '700', marginBottom: 4 },
+  subtitle: { fontSize: 14, color: '#6b7280', marginBottom: 16 },
   input: { backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 12, borderWidth: 1, borderColor: '#e5e9f2' },
   uploadBtn: { backgroundColor: '#3b5bfd', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  restrictedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  restrictedIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  restrictedTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  restrictedText: {
+    fontSize: 16,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  backBtn: {
+    backgroundColor: '#3b5bfd',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
 });

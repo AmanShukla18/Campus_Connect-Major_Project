@@ -82,14 +82,14 @@ export default function LostFoundScreen({ navigation }: any) {
       <Text style={{ color: '#6b7280', marginBottom: 12 }}>Find or report items — instant updates</Text>
       <Text style={styles.section}>Look for lost object</Text>
       <View style={styles.filters}>
-        {(['All','Active','Claimed'] as const).map((f) => (
-          <TouchableOpacity key={f} onPress={() => setFilter(f)} style={[styles.chip, filter===f && styles.chipActive]}>
-            <Text style={[styles.chipText, filter===f && styles.chipTextActive]}>{f}</Text>
+        {(['All', 'Active', 'Claimed'] as const).map((f) => (
+          <TouchableOpacity key={f} onPress={() => setFilter(f)} style={[styles.chip, filter === f && styles.chipActive]}>
+            <Text style={[styles.chipText, filter === f && styles.chipTextActive]}>{f}</Text>
           </TouchableOpacity>
         ))}
       </View>
       <FlatList
-        data={items.filter(i => filter==='All' ? true : i.status===filter)}
+        data={items.filter(i => filter === 'All' ? true : i.status === filter)}
         keyExtractor={(n) => n.id}
         renderItem={({ item }) => (
           <View style={styles.card}>
@@ -137,28 +137,67 @@ export default function LostFoundScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#f5f8ff' },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 8 },
-  section: { fontSize: 18, fontWeight: '700', marginBottom: 8 },
+  title: { fontSize: 28, fontWeight: '800', marginBottom: 8, color: '#1f2937' },
+  section: { fontSize: 18, fontWeight: '700', marginBottom: 12, color: '#374151' },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 14,
+    borderRadius: 20,
     padding: 16,
-    marginBottom: 12,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#e6e9f3',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  cardImage: { width: '100%', height: 160, borderRadius: 12, marginBottom: 8, backgroundColor: '#dbe5ff' },
-  cardVideo: { width: '100%', height: 200, borderRadius: 12, marginBottom: 8, backgroundColor: '#000' },
-  cardBody: { color: '#4e5874' },
-  empty: { textAlign: 'center', color: '#6b7280', marginTop: 24 },
-  filters: { flexDirection: 'row', gap: 8, marginBottom: 10 },
-  chip: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#eaf0ff' },
-  chipActive: { backgroundColor: '#3b5bfd' },
-  chipText: { color: '#3b5bfd', fontWeight: '600' },
+  cardTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, color: '#1f2937' },
+  cardImage: { width: '100%', height: 200, borderRadius: 16, marginBottom: 12, backgroundColor: '#dbe5ff' },
+  cardVideo: { width: '100%', height: 240, borderRadius: 16, marginBottom: 12, backgroundColor: '#000' },
+  cardBody: { color: '#4b5563', fontSize: 15, lineHeight: 22, marginBottom: 12 },
+  empty: { textAlign: 'center', color: '#6b7280', marginTop: 40, fontSize: 16 },
+  filters: { flexDirection: 'row', gap: 10, marginBottom: 16 },
+  chip: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e6e9f3',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  chipActive: { backgroundColor: '#3b5bfd', borderColor: '#3b5bfd' },
+  chipText: { color: '#4b5563', fontWeight: '600' },
   chipTextActive: { color: '#fff' },
-  reportCard: { backgroundColor: '#fff', borderRadius: 14, padding: 16, marginTop: 6, borderWidth: 1, borderColor: '#e6e9f3' },
-  reportBtn: { backgroundColor: '#3b5bfd', borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+  reportCard: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 20,
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: '#e6e9f3',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  reportBtn: {
+    backgroundColor: '#3b5bfd',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    shadowColor: '#3b5bfd',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
 });
 
 

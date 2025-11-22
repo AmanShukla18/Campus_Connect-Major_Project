@@ -1,11 +1,14 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:4000';
+// Automatically detect the dev server IP for mobile devices
+const debuggerHost = Constants.expoConfig?.hostUri;
+const localhost = debuggerHost?.split(':')[0] || 'localhost';
 
-export const api = axios.create({
-  baseURL: `${API_BASE_URL}/api`,
+export const API_BASE_URL = `http://${localhost}:4000`;
+
+export const client = axios.create({
+  baseURL: API_BASE_URL,
 });
 
-export default api;
-
-
+export default client;
